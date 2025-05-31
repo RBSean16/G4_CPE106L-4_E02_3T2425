@@ -32,8 +32,14 @@ class Student(object):
         """Returns the string representation of the student."""
         return f"Name: {self.name}\nScores: {' '.join(map(str, self.scores))}"
 
+    def __lt__(self, other):
+        """Compares students based on names for sorting."""
+        return self.name < other.name
+
 def main():
-    """Creates and manages multiple student objects."""
+    """Creates several students, shuffles them, sorts them, and displays their information."""
+    
+    # Creating a list of Student objects
     students = [
         Student("Alice", 3),
         Student("Bob", 3),
@@ -42,20 +48,20 @@ def main():
         Student("Eve", 3)
     ]
 
-    # Assign random scores to students
+    # Assign random scores to each student
     for student in students:
         for i in range(1, 4):
             student.setScore(i, random.randint(60, 100))
 
-    # Shuffle the student list
+    # Shuffle the list
     random.shuffle(students)
-
+    
     print("Shuffled List:")
     for student in students:
         print(student)
 
-    # Sort students by name
-    students.sort(key=lambda student: student.getName())
+    # Sort the students by name
+    students.sort()
 
     print("\nSorted List:")
     for student in students:
