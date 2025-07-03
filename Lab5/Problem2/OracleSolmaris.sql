@@ -141,7 +141,7 @@ VALUES
 (1,2,1,'Back wall in pantry has mold indicating water seepage. Diagnose and repair.','Service rep has verified the problem. Plumbing contractor has been called.',4,2,'10-12-2015');
 INSERT INTO SERVICE_REQUEST
 VALUES
-(2,5,2,'Air conditioning doesn’t cool.','Service rep has verified problem. Air conditioning contractor has been called.',3,1,'10-12-2015'); 
+(2,5,2,'Air conditioning doesnâ€™t cool.','Service rep has verified problem. Air conditioning contractor has been called.',3,1,'10-12-2015'); 
 INSERT INTO SERVICE_REQUEST
 VALUES
 (3,4,6,'Hardwood floors must be refinished.','Service call has been scheduled.',8,0,'10-16-2015'); 
