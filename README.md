@@ -2,7 +2,7 @@
 
 # VibeCheck: A Journal for Your Mind, A Map for Your Mood
 
-## 📄 Project Description
+## Project Description
 
 VibeCheck is a desktop mental health tracker designed to help users improve self-awareness and emotional wellness through mood logging, structured journaling, and personalized feedback. It empowers individuals to develop healthy mental habits and easily visualize their emotional trends over time, while also providing access to verified local support resources.
 
@@ -34,6 +34,8 @@ VibeCheck is a desktop mental health tracker designed to help users improve self
   ```
 
 ## Team members and roles
-Joebert Axel Diana - Backend
-Harvey Sean Siazon - Documentation, Integrator
-Zultan Sultan - Frontend
+   Joebert Axel Diana - Backend
+   
+   Harvey Sean Siazon - Documentation, Integrator
+   
+   Zultan Sultan - Frontend
