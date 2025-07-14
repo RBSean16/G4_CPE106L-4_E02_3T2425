@@ -13,6 +13,7 @@ SECONDARY_COLOR = "#6c757d"
 SHADOW_COLOR = "#1A000000"
 
 user_id = 1  # Hardcoded for now, but could be dynamic later
+API_BASE_URL = "http://127.0.0.1:8000/api"  # FastAPI base URL
 
 def main(page: ft.Page):
     page.title = "Community Mental Health Tracker"
@@ -39,7 +40,7 @@ def main(page: ft.Page):
             return
 
         # Create or check user
-        response = requests.post("http://127.0.0.1:8000/api/create-user", json={
+        response = requests.post(f"{API_BASE_URL}/create-user", json={
             "user_id": user_id,
             "name": username
         })
@@ -63,7 +64,7 @@ def main(page: ft.Page):
         label = clicked_container.content.controls[1].value
         score = score_map.get(label, 5)
 
-        response = requests.post("http://127.0.0.1:8000/api/mood-entry", json={
+        response = requests.post(f"{API_BASE_URL}/mood-entry", json={
             "user_id": user_id,
             "mood_score": score,
             "notes": f"Selected mood: {label}"
@@ -91,20 +92,23 @@ def main(page: ft.Page):
             page.update()
             return
 
-        response = requests.post("http://127.0.0.1:8000/api/journal-entry", json={
-            "user_id": user_id,
-            "content": content
-        })
-
-        if response.status_code == 200:
-            page.snack_bar = ft.SnackBar(content=ft.Text("Journal entry saved!"), bgcolor=SUCCESS_COLOR)
-        else:
-            page.snack_bar = ft.SnackBar(content=ft.Text(f"Error: {response.json().get('detail', 'Unknown error')}"), bgcolor="red500")
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/journal-entry",
+                json={"user_id": user_id, "content": content},
+            )
+            if response.status_code == 200:
+                journal_entry_ref.current.value = ""  # Clear the input field
+                page.snack_bar = ft.SnackBar(content=ft.Text("Journal entry saved successfully!"), bgcolor=SUCCESS_COLOR)
+            else:
+                page.snack_bar = ft.SnackBar(content=ft.Text(f"Error: {response.json().get('detail', 'Unknown error')}"), bgcolor="red500")
+        except Exception as ex:
+            page.snack_bar = ft.SnackBar(content=ft.Text(f"Failed to connect to the server: {ex}"), bgcolor="red500")
         page.snack_bar.open = True
         page.update()
 
     def get_recommendations(e):
-        response = requests.get(f"http://127.0.0.1:8000/api/recommendation/{user_id}")
+        response = requests.get(f"{API_BASE_URL}/recommendation/{user_id}")
         if response.status_code == 200:
             rec = response.json()
             recommendation_text_ref.current.value = f"{rec['strategy']} — {rec['reason']}"

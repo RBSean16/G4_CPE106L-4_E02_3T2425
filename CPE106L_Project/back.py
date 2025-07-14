@@ -67,8 +67,9 @@ def create_user(user: UserInput):
     with sqlite3.connect("wellness.db") as conn:
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE user_id = ?", (user.user_id,))
-        if c.fetchone():
-            raise HTTPException(status_code=400, detail="User already exists")
+        existing_user = c.fetchone()
+        if existing_user:
+            return {"message": "User already exists"}
         c.execute("INSERT INTO users (user_id, name) VALUES (?, ?)", (user.user_id, user.name))
         conn.commit()
     return {"message": "User created"}
@@ -77,9 +78,6 @@ def create_user(user: UserInput):
 def add_mood(entry: MoodInput):
     with sqlite3.connect("wellness.db") as conn:
         c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE user_id = ?", (entry.user_id,))
-        if not c.fetchone():
-            raise HTTPException(status_code=404, detail="User not found")
         c.execute("INSERT INTO mood_entries (user_id, mood_score, notes, date) VALUES (?, ?, ?, ?)",
                   (entry.user_id, entry.mood_score, entry.notes, date.today().isoformat()))
         conn.commit()
@@ -89,9 +87,6 @@ def add_mood(entry: MoodInput):
 def add_journal(entry: JournalInput):
     with sqlite3.connect("wellness.db") as conn:
         c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE user_id = ?", (entry.user_id,))
-        if not c.fetchone():
-            raise HTTPException(status_code=404, detail="User not found")
         c.execute("INSERT INTO journal_entries (user_id, content, date) VALUES (?, ?, ?)",
                   (entry.user_id, entry.content, date.today().isoformat()))
         conn.commit()
@@ -101,19 +96,19 @@ def add_journal(entry: JournalInput):
 def get_recommendation(user_id: int):
     with sqlite3.connect("wellness.db") as conn:
         c = conn.cursor()
-        c.execute("SELECT mood_score FROM mood_entries WHERE user_id = ? ORDER BY date DESC LIMIT 5", (user_id,))
+        c.execute("SELECT mood_score FROM mood_entries WHERE user_id = ?", (user_id,))
         moods = [row[0] for row in c.fetchall()]
-    
+
     if not moods:
-        return Recommendation(strategy="Log your mood regularly", reason="No mood data available")
-    
+        raise HTTPException(status_code=404, detail="No mood data found for the user")
+
     avg = sum(moods) / len(moods)
     if avg < 4:
-        return Recommendation(strategy="Try mindfulness meditation", reason="Low average mood detected")
+        return {"strategy": "Practice Gratitude", "reason": "Your mood scores suggest you may be feeling down. Gratitude exercises can help improve your outlook."}
     elif avg > 7:
-        return Recommendation(strategy="Keep up the good work!", reason="Mood is consistently high")
+        return {"strategy": "Maintain Positive Habits", "reason": "Your mood scores suggest you're doing well. Keep up the good work!"}
     else:
-        return Recommendation(strategy="Maintain a gratitude journal", reason="Mood is moderate")
+        return {"strategy": "Mindfulness Meditation", "reason": "Your mood scores suggest a neutral state. Mindfulness can help bring clarity and balance."}
 
 # ──────── CHART GENERATION ────────
 
