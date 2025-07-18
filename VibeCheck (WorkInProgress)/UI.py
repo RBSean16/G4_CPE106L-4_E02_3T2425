@@ -1,393 +1,289 @@
+# UI.py
+
 import flet as ft
 import datetime
 import requests
-import webbrowser
-import json
 from typing import Optional
 
+# --- UI Constants ---
 BG_COLOR = "#f8f9fa"
 PRIMARY_COLOR = "#0d6efd"
 WHITE = "#ffffff"
-TEXT_MUTED = "#000000"
-BORDER_COLOR = "#e9ecef"
+TEXT_COLOR = "#212529"
+BLACK = "#000000"
+TEXT_MUTED = "#6c757d"
+BORDER_COLOR = "#dee2e6"
 SUCCESS_COLOR = "#198754"
-INFO_COLOR = "#000000"
-SECONDARY_COLOR = "#6c757d"
-SHADOW_COLOR = "#1A000000"
+ERROR_COLOR = "#dc3545" 
+SHADOW_COLOR = "#6c757d"
 
-user_id = 1  # Hardcoded for now, but could be dynamic later
-API_BASE_URL = "http://127.0.0.1:8000/api"  # FastAPI base URL
+# --- API & App State ---
+API_BASE_URL = "http://127.0.0.1:8000/api"
+app_state = {"user_id": None, "user_name": None}
 
 def main(page: ft.Page):
-    page.title = "Community Mental Health Tracker"
+    page.title = "VibeCheck"
     page.bgcolor = BG_COLOR
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
-    mood_items_ref = []
+    # --- UI Element Refs ---
     journal_entry_ref = ft.Ref[ft.TextField]()
-    recommendation_output_ref = ft.Ref[ft.Container]()
-    recommendation_text_ref = ft.Ref[ft.Text]()
+    calendar_grid_ref = ft.Ref[ft.GridView]()
 
-    def save_file_result(e: ft.FilePickerResultEvent):
-        if e.path:
-            try:
-                journal_text = journal_entry_ref.current.value
-                if journal_text:
-                    with open(e.path, "w", encoding="utf-8") as f:
-                        f.write(journal_text)
-                    show_snack_bar("Journal exported successfully!", SUCCESS_COLOR)
-                else:
-                    show_snack_bar("Journal is empty. Nothing to export.", "red500")
-            except Exception as ex:
-                show_snack_bar(f"Failed to save file: {ex}", "red500")
-
-    file_picker = ft.FilePicker(on_result=save_file_result)
-    page.overlay.append(file_picker)
-
-    def show_snack_bar(message: str, color: str):
-        """Helper function to show snack bar messages"""
-        page.snack_bar = ft.SnackBar(content=ft.Text(message), bgcolor=color)
-        page.snack_bar.open = True
-        page.update()
-
-    def check_api_connection() -> bool:
-        """Check if API server is running"""
-        try:
-            response = requests.get(f"{API_BASE_URL.replace('/api', '')}/docs", timeout=2)
-            return response.status_code == 200
-        except:
-            return False
-
-    def handle_login(e):
-        username = username_field.value
-        password = password_field.value  # Add this line to get the password from the password field
-        if not username:
-            username_field.error_text = "Username cannot be empty"
-            page.update()
-            return
-
-        # Check API connection first
-        if not check_api_connection():
-            show_snack_bar("API server is not running. Please start the FastAPI server first.", "red500")
-            return
-
-        try:
-            # Create or check user
-            response = requests.post(f"{API_BASE_URL}/create-user", json={
-                "user_id": user_id,
-                "name": username,
-                "password": password  # Add this line to include the password in the request
-            }, timeout=5)
-
-            if response.status_code == 200:
-                show_snack_bar("Login successful!", SUCCESS_COLOR)
-                page.go("/main")
-            else:
-                show_snack_bar("Login failed. Please try again.", "red500")
-        except requests.exceptions.RequestException as ex:
-            show_snack_bar(f"Connection error: {ex}", "red500")
-
-    def select_mood(e):
-        # Check API connection first
-        if not check_api_connection():
-            show_snack_bar("API server is not running. Please start the FastAPI server first.", "red500")
-            return
-
-        clicked_container = e.control
-        score_map = {
-            "Happy": 9,
-            "Content": 7,
-            "Neutral": 5,
-            "Sad": 3,
-            "Angry": 1
-        }
-        label = clicked_container.content.controls[1].value
-        score = score_map.get(label, 5)
-
-        try:
-            response = requests.post(f"{API_BASE_URL}/mood-entry", json={
-                "user_id": user_id,
-                "mood_score": score,
-                "notes": f"Selected mood: {label}"
-            }, timeout=5)
-
-            if response.status_code == 200:
-                show_snack_bar(f"Mood '{label}' saved!", SUCCESS_COLOR)
-                # Update visual selection
-                for item_container in mood_items_ref:
-                    is_selected = (item_container == clicked_container)
-                    item_container.bgcolor = PRIMARY_COLOR if is_selected else WHITE
-                    item_container.border = ft.border.all(1, PRIMARY_COLOR if is_selected else BORDER_COLOR)
-                    item_container.content.controls[0].color = WHITE if is_selected else None
-                    item_container.content.controls[1].color = WHITE if is_selected else TEXT_MUTED
-                page.update()
-            else:
-                error_msg = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else 'Server error'
-                show_snack_bar(f"Error: {error_msg}", "red500")
-        except requests.exceptions.RequestException as ex:
-            show_snack_bar(f"Connection error: {ex}", "red500")
-
-    def save_entry(e):
-        content = journal_entry_ref.current.value
-        if not content:
-            show_snack_bar("Journal entry is empty.", "red500")
-            return
-
-        # Check API connection first
-        if not check_api_connection():
-            show_snack_bar("API server is not running. Please start the FastAPI server first.", "red500")
-            return
-
-        try:
-            response = requests.post(
-                f"{API_BASE_URL}/journal-entry",
-                json={"user_id": user_id, "content": content},
-                timeout=5
-            )
-            if response.status_code == 200:
-                journal_entry_ref.current.value = ""  # Clear the input field
-                show_snack_bar("Journal entry saved successfully!", SUCCESS_COLOR)
-            else:
-                error_msg = response.json().get('detail', 'Unknown error') if response.headers.get('content-type') == 'application/json' else 'Server error'
-                show_snack_bar(f"Error: {error_msg}", "red500")
-        except requests.exceptions.RequestException as ex:
-            show_snack_bar(f"Connection error: {ex}", "red500")
-
-    def get_recommendations(e):
-        try:
-            response = requests.get(f"{API_BASE_URL}/recommendation/{user_id}")
-            response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
-            rec = response.json()
-            recommendation_text_ref.current.value = f"{rec['strategy']} — {rec['reason']}"
-            recommendation_output_ref.current.visible = True
-        except requests.exceptions.RequestException as e:
-            page.snack_bar = ft.SnackBar(content=ft.Text("Failed to fetch recommendation."), bgcolor="red500")
-            page.snack_bar.open = True
-        except KeyError as e:
-            page.snack_bar = ft.SnackBar(content=ft.Text("Invalid response from API."), bgcolor="red500")
-            page.snack_bar.open = True
-        page.update()
-
-    def export_to_txt(e):
-        journal_text = journal_entry_ref.current.value
-        if not journal_text:
-            page.snack_bar = ft.SnackBar(content=ft.Text("Journal is empty. Nothing to export."), bgcolor="red500")
-            page.snack_bar.open = True
-            page.update()
-            return
-
-        # Use the file picker to save
-        file_picker.save_file(
-            dialog_title="Save Journal Entry",
-            file_name=f"journal_entry_{datetime.date.today().isoformat()}.txt",
-            file_type=ft.FilePickerFileType.CUSTOM,
-            allowed_extensions=["txt"]
-        )
-
-    def view_mood_chart(e):
-        """Open mood trend chart in browser"""
-        if not check_api_connection():
-            show_snack_bar("API server is not running. Please start the FastAPI server first.", "red500")
-            return
-
-        try:
-            # Make request to generate chart
-            response = requests.get(f"{API_BASE_URL}/mood-trend/{user_id}", timeout=10)
-            if response.status_code == 200:
-                # Open the chart in browser
-                chart_url = f"http://127.0.0.1:8000/static/mood_trend_{user_id}.png"
-                webbrowser.open(chart_url)
-                show_snack_bar("Mood chart opened in browser!", SUCCESS_COLOR)
-            else:
-                error_msg = response.json().get('detail', 'No mood data found') if response.headers.get('content-type') == 'application/json' else 'Server error'
-                show_snack_bar(f"Error: {error_msg}", "red500")
-        except requests.exceptions.RequestException as ex:
-            show_snack_bar(f"Connection error: {ex}", "red500")
-
-    def view_journal_heatmap(e):
-        """Open journal heatmap in browser"""
-        if not check_api_connection():
-            show_snack_bar("API server is not running. Please start the FastAPI server first.", "red500")
-            return
-
-        try:
-            # Make request to generate heatmap
-            response = requests.get(f"{API_BASE_URL}/journal-heatmap/{user_id}", timeout=10)
-            if response.status_code == 200:
-                # Open the heatmap in browser
-                heatmap_url = f"http://127.0.0.1:8000/static/journal_heatmap_{user_id}.png"
-                webbrowser.open(heatmap_url)
-                show_snack_bar("Journal heatmap opened in browser!", SUCCESS_COLOR)
-            else:
-                error_msg = response.json().get('detail', 'No journal data found') if response.headers.get('content-type') == 'application/json' else 'Server error'
-                show_snack_bar(f"Error: {error_msg}", "red500")
-        except requests.exceptions.RequestException as ex:
-            show_snack_bar(f"Connection error: {ex}", "red500")
-
-    def view_wellness_scores(e):
-        """Open wellness scores chart in browser"""
-        if not check_api_connection():
-            show_snack_bar("API server is not running. Please start the FastAPI server first.", "red500")
-            return
-
-        try:
-            # Make request to generate wellness scores chart
-            response = requests.get(f"{API_BASE_URL}/wellness-scores", timeout=10)
-            if response.status_code == 200:
-                # Open the chart in browser
-                chart_url = f"http://127.0.0.1:8000/static/wellness_scores.png"
-                webbrowser.open(chart_url)
-                show_snack_bar("Wellness scores chart opened in browser!", SUCCESS_COLOR)
-            else:
-                show_snack_bar("Error generating wellness scores chart", "red500")
-        except requests.exceptions.RequestException as ex:
-            show_snack_bar(f"Connection error: {ex}", "red500")
-
-    username_field = ft.TextField(label="Username", autofocus=True, width=300, height=40, border_radius=10, bgcolor=WHITE, border=ft.border.all(1, BORDER_COLOR), focused_color=ft.border.all(1, PRIMARY_COLOR), color="black")
-    password_field = ft.TextField(label="Password", password=True, can_reveal_password=True, width=300, height=40, border_radius=10, bgcolor=WHITE, border=ft.border.all(1, BORDER_COLOR), focused_color=ft.border.all(1, PRIMARY_COLOR), color="black")
+    # --- MAIN UI VIEW CREATORS ---
 
     def create_login_view():
+        login_username_field = ft.TextField(label="Username", autofocus=True, color=BLACK)
+        login_password_field = ft.TextField(label="Password", password=True, can_reveal_password=True, color=BLACK)
+        error_text = ft.Text(value="", color=ERROR_COLOR, visible=False)
+
+        def handle_login(e):
+            error_text.visible = False
+            page.update()
+            if not login_username_field.value or not login_password_field.value:
+                error_text.value = "Please enter a username and password."
+                error_text.visible = True
+                page.update()
+                return
+            try:
+                response = requests.post(f"{API_BASE_URL}/login", json={"name": login_username_field.value, "password": login_password_field.value})
+                if response.status_code == 200:
+                    data = response.json()
+                    app_state["user_id"] = data["user_id"]
+                    app_state["user_name"] = data["name"]
+                    page.go("/main")
+                else:
+                    error_text.value = response.json().get("detail", "An unknown error occurred.")
+                    error_text.visible = True
+                    page.update()
+            except requests.exceptions.RequestException:
+                error_text.value = "Cannot connect to the server."
+                error_text.visible = True
+                page.update()
+        
+        login_password_field.on_submit = handle_login
+
         return ft.View(
-            route="/",
-            controls=[
+            "/",
+            [
                 ft.Container(
                     content=ft.Column([
-                        ft.Text("Welcome Back", size=24, weight=ft.FontWeight.BOLD, color="#000000"),
-                        ft.Text("Sign in to continue to the tracker.", color=TEXT_MUTED),
-                        username_field,
-                        password_field,
-                        ft.ElevatedButton("Login", on_click=handle_login, width=400, bgcolor=PRIMARY_COLOR, color=WHITE),
-                        ft.Text("Forgot Password?", color=TEXT_MUTED, size=12),
+                        ft.Text("VibeCheck", size=32, weight=ft.FontWeight.BOLD, color=BLACK),
+                        ft.Text("A Journal for Your Mind, A Map for Your Mood", color=TEXT_MUTED),
+                        login_username_field,
+                        login_password_field,
+                        error_text,
+                        ft.ElevatedButton("Login", width=400, on_click=handle_login, bgcolor=PRIMARY_COLOR, color=WHITE),
+                        ft.Column(
+                            [
+                                ft.Text("No account yet?"),
+                                ft.TextButton("Create one here.", on_click=lambda _: page.go("/register"), style=ft.ButtonStyle(padding=0)),
+                            ],
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=0,
+                        ),
                     ], spacing=15, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     width=400, padding=40, border_radius=10, bgcolor=WHITE,
-                    shadow=ft.BoxShadow(spread_radius=1, blur_radius=15, color=SHADOW_COLOR)
+                    shadow=ft.BoxShadow(blur_radius=15, color=ft.Colors.with_opacity(0.1, SHADOW_COLOR)),
                 )
             ],
             vertical_alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
+    def create_registration_view():
+        reg_username_field = ft.TextField(label="Username", autofocus=True, color=BLACK)
+        reg_password_field = ft.TextField(label="Password", password=True, can_reveal_password=True, color=BLACK)
+        error_text = ft.Text(value="", color=ERROR_COLOR, visible=False)
+
+        def handle_registration(e):
+            error_text.visible = False
+            page.update()
+            if not reg_username_field.value or not reg_password_field.value:
+                error_text.value = "Username and password cannot be empty."
+                error_text.visible = True
+                page.update()
+                return
+            try:
+                response = requests.post(f"{API_BASE_URL}/register", json={"name": reg_username_field.value, "password": reg_password_field.value})
+                if response.status_code == 200:
+                    page.snack_bar = ft.SnackBar(content=ft.Text("Account created! Please log in."), bgcolor=SUCCESS_COLOR)
+                    page.snack_bar.open = True
+                    page.go("/")
+                else:
+                    error_text.value = response.json().get("detail", "Registration failed.")
+                    error_text.visible = True
+                    page.update()
+            except requests.exceptions.RequestException:
+                error_text.value = "Cannot connect to the server."
+                error_text.visible = True
+                page.update()
+        
+        reg_password_field.on_submit = handle_registration
+
+        return ft.View(
+            "/register",
+            [
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Create Your Account", size=24, weight=ft.FontWeight.BOLD, color=BLACK),
+                        reg_username_field,
+                        reg_password_field,
+                        error_text,
+                        ft.ElevatedButton("Create Account", width=400, on_click=handle_registration, bgcolor=SUCCESS_COLOR, color=WHITE),
+                    ], spacing=15, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    width=400, padding=40, border_radius=10, bgcolor=WHITE,
+                    shadow=ft.BoxShadow(blur_radius=15, color=ft.Colors.with_opacity(0.1, SHADOW_COLOR)),
+                )
+            ],
+            appbar=ft.AppBar(title=ft.Text("Register"), leading=ft.IconButton(icon=ft.Icons.ARROW_BACK, on_click=lambda _: page.go("/"))),
+            vertical_alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
     def create_main_view():
-        nonlocal mood_items_ref
-        mood_items_ref = []
+        # --- Helper function for showing SnackBars on the main page ---
+        def show_snack_bar(message: str, color: str):
+            page.snack_bar = ft.SnackBar(content=ft.Text(message), bgcolor=color)
+            page.snack_bar.open = True
+            page.update()
+
+        def select_mood(e):
+            if not app_state["user_id"]: return
+            score_map = {"Happy": 9, "Content": 7, "Neutral": 5, "Sad": 3, "Angry": 1}
+            label = e.control.data
+            score = score_map.get(label, 5)
+            try:
+                requests.post(f"{API_BASE_URL}/mood-entry", json={"user_id": app_state["user_id"], "mood_score": score, "notes": f"Selected mood: {label}"})
+                show_snack_bar(f"Mood '{label}' saved!", SUCCESS_COLOR)
+                for item_container in e.control.parent.controls:
+                    is_selected = (item_container == e.control)
+                    item_container.bgcolor = PRIMARY_COLOR if is_selected else WHITE
+                    item_container.border = ft.border.all(2, PRIMARY_COLOR if is_selected else BORDER_COLOR)
+                    item_container.content.controls[0].color = WHITE if is_selected else TEXT_COLOR
+                    item_container.content.controls[1].color = WHITE if is_selected else TEXT_MUTED
+                page.update()
+            except requests.exceptions.RequestException: show_snack_bar("Connection error.", ERROR_COLOR)
+
+        def save_entry(e):
+            if not app_state["user_id"]: return
+            content = journal_entry_ref.current.value
+            if not content:
+                show_snack_bar("Journal entry is empty.", ERROR_COLOR)
+                return
+            try:
+                requests.post(f"{API_BASE_URL}/journal-entry", json={"user_id": app_state["user_id"], "content": content})
+                journal_entry_ref.current.value = ""
+                show_snack_bar("Journal entry saved!", SUCCESS_COLOR)
+                update_calendar_with_entries()
+                page.update()
+            except requests.exceptions.RequestException: show_snack_bar("Connection error.", ERROR_COLOR)
+        
+        def update_calendar_with_entries():
+            if not app_state["user_id"] or not calendar_grid_ref.current: return
+            try:
+                response = requests.get(f"{API_BASE_URL}/journal-dates/{app_state['user_id']}")
+                if response.status_code == 200:
+                    entry_dates = set(response.json().get("dates", []))
+                    today_str = datetime.date.today().isoformat()
+                    for control in calendar_grid_ref.current.controls[7:]:
+                        if isinstance(control, ft.Container) and control.data:
+                            day_str = control.data
+                            if day_str == today_str:
+                                control.bgcolor = PRIMARY_COLOR
+                                control.content.color = WHITE
+                            elif day_str in entry_dates:
+                                control.bgcolor = ft.Colors.with_opacity(0.3, SUCCESS_COLOR)
+                                control.content.color = BLACK
+                            else:
+                                control.bgcolor = None
+                                control.content.color = TEXT_COLOR
+                    page.update()
+            except requests.exceptions.RequestException: pass
+
+        mood_items = []
         moods = [("😄", "Happy"), ("😊", "Content"), ("😐", "Neutral"), ("😟", "Sad"), ("😠", "Angry")]
         for icon, label in moods:
-            is_selected = (label == "Neutral")
-            container = ft.Container(
-                content=ft.Column([
-                    ft.Text(icon, size=24, color=WHITE if is_selected else None),
-                    ft.Text(label, size=12, color=WHITE if is_selected else TEXT_MUTED),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
-                on_click=select_mood, padding=10, border_radius=8,
-                bgcolor=PRIMARY_COLOR if is_selected else WHITE,
-                border=ft.border.all(1, PRIMARY_COLOR if is_selected else BORDER_COLOR),
-                tooltip=f"Select {label}"
+            mood_items.append(
+                ft.Container(
+                    content=ft.Column([ft.Text(icon, size=30), ft.Text(label, size=12, color=TEXT_MUTED)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
+                    on_click=select_mood, data=label, padding=10, border_radius=8, border=ft.border.all(1, BORDER_COLOR), tooltip=f"Select {label}"
+                )
             )
-            mood_items_ref.append(container)
 
         today = datetime.date.today()
-        calendar_grid = ft.GridView(expand=False, runs_count=7, max_extent=40, child_aspect_ratio=1.0, spacing=5, run_spacing=5)
-        for day in ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]:
-            calendar_grid.controls.append(ft.Container(ft.Text(day, weight=ft.FontWeight.BOLD, color=TEXT_MUTED), alignment=ft.alignment.center))
-
+        calendar_grid_ref.current = ft.GridView(ref=calendar_grid_ref, expand=False, runs_count=7, max_extent=40, child_aspect_ratio=1.0, spacing=5, run_spacing=5)
+        for day in ["M", "T", "W", "T", "F", "S", "S"]:
+            calendar_grid_ref.current.controls.append(ft.Container(ft.Text(day, weight=ft.FontWeight.BOLD, color=TEXT_MUTED), alignment=ft.alignment.center))
+        
         first_day_of_month = today.replace(day=1)
-        weekday_of_first = (first_day_of_month.weekday() + 1) % 7
-        for _ in range(weekday_of_first): calendar_grid.controls.append(ft.Container())
-
-        days_in_month = (first_day_of_month.replace(month=first_day_of_month.month % 12 + 1, day=1) - datetime.timedelta(days=1)).day
+        for _ in range(first_day_of_month.weekday()): calendar_grid_ref.current.controls.append(ft.Container())
+        
+        days_in_month = (today.replace(month=today.month % 12 + 1, day=1) - datetime.timedelta(days=1)).day
         for day_num in range(1, days_in_month + 1):
-            is_today = (day_num == today.day)
-            has_entry = False
-            day_container = ft.Container(
-                content=ft.Text(str(day_num), color=WHITE if is_today else None),
-                alignment=ft.alignment.center, border_radius=20,
-                bgcolor=PRIMARY_COLOR if is_today else ("green100" if has_entry else None)
+            day_date = datetime.date(today.year, today.month, day_num)
+            calendar_grid_ref.current.controls.append(
+                ft.Container(content=ft.Text(str(day_num), color=TEXT_COLOR), alignment=ft.alignment.center, border_radius=20, data=day_date.isoformat())
             )
-            calendar_grid.controls.append(day_container)
 
         left_sidebar = ft.Container(
             content=ft.Column([
-                ft.Text("Mood Tracker", weight=ft.FontWeight.BOLD, size=18, color="#000000"),
-                ft.Text(f"How are you feeling today? ({today})", color=TEXT_MUTED, size=12),
-                ft.Row(controls=mood_items_ref, alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Text("How are you feeling?", weight=ft.FontWeight.BOLD, size=20, color=BLACK),
+                ft.Row(controls=mood_items, alignment=ft.MainAxisAlignment.SPACE_EVENLY),
                 ft.Divider(),
-                ft.Text("Journaling Streak", weight=ft.FontWeight.BOLD, size=18, color="#000000"),
-                calendar_grid,
-                ft.Column([
-                    ft.Divider(),
-                    ft.Text("Local Support:", color=TEXT_MUTED, size=12),
-                    ft.Text("Community Center Hotline", color=PRIMARY_COLOR, selectable=True),
-                    ft.Text("Find a Local Therapist", color=PRIMARY_COLOR, selectable=True)
-                ], expand=True, alignment=ft.MainAxisAlignment.END, spacing=5)
+                ft.Text("Journaling Activity", weight=ft.FontWeight.BOLD, size=18, color=BLACK),
+                calendar_grid_ref.current,
             ], spacing=15, scroll=ft.ScrollMode.AUTO),
-            width=350, bgcolor=WHITE, border_radius=10, padding=20,
-            shadow=ft.BoxShadow(blur_radius=4, color=SHADOW_COLOR)
-        )
-
-        journal_entry_ref.current = ft.TextField(
-            ref=journal_entry_ref, multiline=True, min_lines=10,
-            hint_text="Write about your day, your thoughts, and your feelings...",
-            border=ft.InputBorder.OUTLINE, border_radius=8, expand=True, color="black"
+            width=400, padding=20, bgcolor=WHITE, border_radius=10,
+            shadow=ft.BoxShadow(blur_radius=10, color=ft.Colors.with_opacity(0.1, SHADOW_COLOR))
         )
         main_content = ft.Container(
             content=ft.Column([
-                ft.Text(f"Journal Entry for {today}", weight=ft.FontWeight.BOLD, size=18, color="#000000"),
-                journal_entry_ref.current,
-                ft.ElevatedButton("Save Entry", on_click=save_entry, bgcolor=PRIMARY_COLOR, color=WHITE, height=50)
-            ], spacing=15),
-            expand=True, bgcolor=WHITE, border_radius=10, padding=20,
-            shadow=ft.BoxShadow(blur_radius=4, color=SHADOW_COLOR)
+                ft.Text(f"Journal Entry for {today.strftime('%B %d, %Y')}", weight=ft.FontWeight.BOLD, size=18, color=BLACK),
+                ft.TextField(ref=journal_entry_ref, multiline=True, min_lines=10, expand=True, border_color=BORDER_COLOR, color=BLACK),
+                ft.ElevatedButton("Save Entry", on_click=save_entry, icon=ft.Icons.SAVE, bgcolor=PRIMARY_COLOR, color=WHITE),
+            ], spacing=15, expand=True),
+            expand=True, padding=20, bgcolor=WHITE, border_radius=10,
+            shadow=ft.BoxShadow(blur_radius=10, color=ft.Colors.with_opacity(0.1, SHADOW_COLOR))
         )
-
-        recommendation_text_ref.current = ft.Text("", size=14)
-        recommendation_output_ref.current = ft.Container(
-            ref=recommendation_output_ref, visible=False,
-            content=ft.Column([
-                ft.Text("Recommendations:", weight=ft.FontWeight.BOLD),
-                recommendation_text_ref.current
-            ]),
-            padding=15, border_radius=8, border=ft.border.all(1, "blue200"), bgcolor="blue50"
-        )
-
         right_sidebar = ft.Container(
             content=ft.Column([
-                ft.Text("AI-Powered Insights", weight=ft.FontWeight.BOLD, size=18, color="#000000"),
-                ft.Text("Let our AI assistant provide feedback based on your journal.", color=TEXT_MUTED, size=12),
-                ft.ElevatedButton("Analyze with AI", on_click=get_recommendations, bgcolor=INFO_COLOR, color=WHITE, height=50),
-                recommendation_output_ref.current,
-                ft.Divider(height=20),
-                ft.Text("Data Export", weight=ft.FontWeight.BOLD, size=18, color="#000000"),
-                ft.Text("Export your data for personal use or to share with a professional.", color=TEXT_MUTED, size=12),
-                ft.ElevatedButton("Export Journal to .txt", on_click=export_to_txt, bgcolor=SECONDARY_COLOR, color=WHITE, height=50),
-            ], spacing=15, scroll=ft.ScrollMode.AUTO),
-            width=350, bgcolor=WHITE, border_radius=10, padding=20,
-            shadow=ft.BoxShadow(blur_radius=4, color=SHADOW_COLOR)
+                ft.Text("Insights & Visuals", weight=ft.FontWeight.BOLD, size=18, color=BLACK),
+                ft.Divider(),
+                ft.Text("Local Support Resources", weight=ft.FontWeight.BOLD, size=16, color=BLACK),
+                ft.Text("National Center for Mental Health Crisis Hotline", size=12),
+                ft.Text("1553", size=14, weight=ft.FontWeight.BOLD, selectable=True),
+                ft.TextButton("Mapúa University Health Services", url="https://www.mapua.edu.ph/pages/offices/health-services"),
+            ], spacing=8),
+            width=300, padding=20, bgcolor=WHITE, border_radius=10,
+            shadow=ft.BoxShadow(blur_radius=10, color=ft.Colors.with_opacity(0.1, SHADOW_COLOR))
         )
-
+        update_calendar_with_entries()
         return ft.View(
-            route="/main",
-            controls=[ft.Row([left_sidebar, main_content, right_sidebar], spacing=15, expand=True)],
-            padding=15
+            "/main",
+            [ft.Row([left_sidebar, main_content, right_sidebar], spacing=20, expand=True)],
+            appbar=ft.AppBar(
+                title=ft.Text(f"VibeCheck - {app_state.get('user_name', '')}"),
+                actions=[ft.IconButton(icon=ft.Icons.LOGOUT, tooltip="Logout", on_click=lambda _: page.go("/"))],
+            ),
         )
 
-    def route_change(route):
+    # --- Route Management ---
+    def route_change(e):
         page.views.clear()
         if page.route == "/main":
             page.views.append(create_main_view())
+        elif page.route == "/register":
+            page.views.append(create_registration_view())
         else:
+            app_state["user_id"] = None
+            app_state["user_name"] = None
             page.views.append(create_login_view())
         page.update()
 
-    def view_pop(view):
-        page.views.pop()
-        top_view = page.views[-1]
-        page.go(top_view.route)
-
     page.on_route_change = route_change
-    page.on_view_pop = view_pop
     page.go(page.route)
-
 
 if __name__ == "__main__":
     ft.app(target=main)
